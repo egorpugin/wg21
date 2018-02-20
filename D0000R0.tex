@@ -1,0 +1,142 @@
+% !TeX program = pdflatex
+\documentclass{wg21}
+
+\usepackage{xcolor}
+\usepackage{soul}
+\usepackage{ulem}
+\usepackage{fullpage}
+\usepackage{parskip}
+\usepackage{listings}
+\usepackage[cachedir=.build,outputdir=.build]{minted}
+\usepackage{enumitem}
+\usepackage{csquotes}
+
+\lstdefinestyle{base}{
+  language=c++,
+  breaklines=false,
+  basicstyle=\ttfamily\color{black},
+  moredelim=**[is][\color{green!50!black}]{@}{@},
+  escapeinside={(*@}{@*)}
+}
+
+\newcommand{\cc}[1]{\mintinline{c++}{#1}}
+\newminted[cpp]{c++}{}
+
+
+\title{fs::current\_thread\_path()}
+\docnumber{DXXXXR0}
+\audience{Library Evolution Group}
+\author{Egor Pugin}{egor.pugin@gmail.com}
+
+\begin{document}
+\maketitle
+
+\section{Revision history}
+\begin{itemize}
+  \item R0 -- Initial draft
+\end{itemize}
+
+
+\section{Abstract}
+This paper proposes an addition of a function <<std::filesystem::current_thread_path()>> to filesystem library.
+
+\begin{cpp}
+namespace fs = std::filesystem;
+
+fs::current_path();        // existing, returns process-wide working directory
+fs::current_thread_path(); // proposed, returns thread-local working directory
+\end{cpp}
+
+
+\section{Motivation}
+When application performs extensively on filesystem in multithreaded environment,\\ fs::current_directory() often is not enough.
+Programmers have to implement some thread's current working directory via: 1) global thread local variable, 2) a function with thread local variable or 3) local/member variable that is passed down to users.
+
+Implementation of this facility in many cases is more or less common, so it can be considered as an addition to Standard Library.
+
+
+
+\section{Possible implementation}
+
+% 30.11
+
+fs::current_thread_path() gets it initial value from fs::current_path() or user-provided value on the first call.
+Later, it can be retrieved or changed in the same way.
+
+\subsection{Declaration}
+
+\begin{cpp}
+namespace std::filesystem
+{
+
+    path current_thread_path();
+    path current_thread_path(std::error_code& ec);
+    void current_thread_path(const path& p);
+    void current_thread_path(const path& p, std::error_code& ec) noexcept;
+
+}
+\end{cpp}
+
+\subsection{Definition}
+
+\begin{cpp}
+namespace std::filesystem
+{
+
+    path __current_thread_path(const path &p = path(), std::error_code* ec = nullptr)
+    {
+        thread_local auto thread_working_dir = ec ? current_path(*ec) : current_path();
+        if (p.empty())
+            return thread_working_dir;
+        return thread_working_dir = fs::absolute(p);
+    }
+    
+    path current_thread_path()
+    {
+        return __current_thread_path();
+    }
+    
+    path current_thread_path(std::error_code& ec)
+    {
+        return __current_thread_path(path(), &ec);
+    }
+    
+    void current_thread_path(const path& p)
+    {
+        __current_thread_path(p);
+    }
+    
+    void current_thread_path(const path& p, std::error_code& ec) noexcept
+    {
+        __current_thread_path(p, &ec);
+    }
+
+}
+\end{cpp}
+
+
+\subsection{Other variants}
+
+\begin{cpp}
+std::this_thread::path()?
+\end{cpp}
+
+
+\section{Proposed wording}
+
+TBD
+
+
+
+
+\section{References}
+\renewcommand{\section}[2]{}%
+\begin{thebibliography}{9}
+  \bibitem[N4727]{N4727}
+    Richard Smith,
+    \emph{Working Draft, Standard for Programming Language C++}\newline
+    \url{http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2018/n4727.pdf}
+
+\end{thebibliography}
+
+\end{document}
